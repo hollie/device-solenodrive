@@ -44,18 +44,50 @@ sub connect_target {
     # Open the port
     $self->_device_open();
 
-    my ($response, $bytes, $pingcount);
+}
 
-    # Request bootloader operation
-    $self->_debug( 1, "Anybody home?" );
+sub enumerate {
+
+	my $self = shift;
+	
+    my ($response);
+
+	# Ensure we only try to write when we're connected
+	if (! $self->{_connected}) {
+		$self->_debug(3, "Not actually enumerating cause we're not connected yet");
+		return;
+	}
+
     # Enumerate
-    $self->_write_packet(0xFEFEFEFE, "E");
+    $self->_write_packet("FEFEFEFE", "E0");
 
     # Loop until we get a timeout of more than 10 seconds
     # Nodes on the bus will respond to this command with their address
-    $response = $self->_read_packet(20);
+	say "Enumerating the devices on the bus, this operation can take up to 10 seconds...";
+	
+	while ($response = $self->_read_packet(5)) {
+		next if ($response eq "invalid_crc"); # Conflict on bus, will be resolved by auto-backoff
+		last if ($response eq "timeout");
+		
+		if ($response =~ /(\w{8})45(\w{2})/) {
+			$self->{_nodes}->{$1}->{firmware} = $2;
+		}
+				
+	};
+	
+	foreach (keys(%{$self->{_nodes}})) {
+		say;
+	
+	}
+}
 
-
+sub set {
+	my ( $self, $address, $channel ) = @_;
+	
+	say "Setting channel $channel on $address";
+	
+	$self->_write_packet($address, "D$channel");
+	
 }
 
 # open the port to a device, be it a serial port or a socket
@@ -101,6 +133,8 @@ sub _device_open {
 
     $self->_debug( 1, "Port opened" );
 
+	$self->{_connected} = 1;
+
     $self->{_fh} = $fh;
     return;
 
@@ -108,15 +142,23 @@ sub _device_open {
 
 ## _write_packet
 #   Writes a packet to the device
-#   Takes a string of hex characters as input (e.g. "DEADBEEF").
-#   Two characters get converted to a single byte that will be sent over the link
+#   Takes two inputs: a string of character representing a hexadecimal address, and a two-character string os ASCII-readable characters that are a command/parameter sequence.
 sub _write_packet {
 
     my ( $self, $address, $data ) = @_;
 
+	croak "Address should be 8 characters long" if (length($address) != 8);
+	croak "Command should be 2 characters long" if (length($data) != 2);
+	
+	# Ensure we only try to write when we're connected
+	if (! $self->{_connected}) {
+		$self->_debug(3, "Not actually writing cause we're not connected yet");
+		return;
+	}
+	
     # Create packet for transmission
     my $addr_string = pack ("H*", $address);
-    my $cmnd_string = pack( "H*", $data );
+    my $cmnd_string = pack( "A*", $data );
     my $string = $addr_string . $cmnd_string;
 
     my $crc = $self->_crc16($string);
@@ -150,7 +192,7 @@ sub _read_packet {
     my $result;
 
     eval {
-
+        local $SIG{ALRM} = sub { die "timeout\n" }; # NB: \n required
         # Set alarm
         alarm($timeout);
 
@@ -192,7 +234,8 @@ sub _read_packet {
         if ( $@ =~ /timeout/ ) {
 
             # Oops, we had a timeout
-            croak("Timeout waiting for data from device");
+            #carp("Timeout waiting for data from device");
+            return "timeout";
         }
         else {
 
@@ -262,6 +305,7 @@ sub _parse_response {
                     . " -- calc: "
                     . $self->_dec2hex($crc_check)
 		      . "\n" );
+		      return "invalid_crc";
         }
     }
 
@@ -348,6 +392,22 @@ sub _debug {
     }
 }
 
+# Helper function converting dec2hex
+sub _dec2hex {
+
+    my ( $self, $dec, $fill ) = @_;
+
+    my $fmt_string;
+
+    if ( defined($fill) ) {
+        $fmt_string = "%0" . $fill . "X";
+    }
+    else {
+        $fmt_string = "%02X";
+    }
+    return sprintf( $fmt_string, $dec );
+}
+
 # Speed up the Moose object construction
 __PACKAGE__->meta->make_immutable;
 no Moose;
@@ -385,6 +445,16 @@ Optional parameter when using a serial port for connecting to the bootloader. De
 Controls the verbosity of the module. Defaults to 0. Increasing numbers make the module more chatty. 5 is the highest level and probably provides too much information. 3 is a good level to get started.
 
 =back
+
+=head2 C<connect_target()>
+
+Open the connection to the target device, should be called before trying to send commands
+
+=head2 C<enumerate_bus()>
+
+Enumerate the devices on the bus, reports the addresses of the devices together with their firmware version.
+The returned object is a hash containing the address/firmware version pairs.
+
 
 =head2 C<BUILD>
 

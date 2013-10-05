@@ -14,9 +14,6 @@ use IO::Socket::INET;
 
 BEGIN { use_ok('Device::Solenodrive'); }
 
-my $debug_mult = 10
-    ; # Set this to a big number for longer timeouts when interactively debugging.
-
 my $tcp = IO::Socket::INET->new(
     Listen    => 5,
     Proto     => 'tcp',
@@ -32,18 +29,32 @@ if ( $pid == 0 ) {
 
     # child
     my $sel = IO::Select->new($tcp);
-    $sel->can_read( 10 * $debug_mult ) or die;
+    $sel->can_read( 10 ) or die;
     my $client = $tcp->accept;
     ok $client, 'client accepted';
     $sel = IO::Select->new($client);
-    $sel->can_read( 10 * $debug_mult ) or die;
+    $sel->can_read( 10 ) or die;
     my ($buf, $bytes, $resp);
 
     # Handle enumeration request
     $bytes = sysread $client, $buf, 2048;
-    is $bytes, 5, 'sync packet length';
-    is $buf, "\x0F\x00\x00\x00\x04", "Got bootloader info request";
-    $resp = "\x0F\x00\x00\x05\x05\x01\xFF\x84\x01\x02\x03\x00\x31\x42\x04";
+    is $bytes, 10, 'sync packet length';
+    is $buf, "\x0F\xFE\xFE\xFE\xFEE0\xCF\xE0\x04", "Got enumeration request";
+    # Send first enumeration response
+    $resp = "\x0F\xAB\xCD\xEF\x01E3\x75\xA3\x04";
+    syswrite $client, $resp, length($resp);
+    # And second one
+    sleep(1);
+    $resp = "\x0F\xAB\xCD\xEF\x02E4\xC2\x8A\x04";
+    syswrite $client, $resp, length($resp);
+    
+    # Handle command
+    $sel->can_read( 10 ) or die;
+    $bytes = sysread $client, $buf, 2048;
+    is $bytes, 10, 'set output request length';
+    is $buf, "\x0f\xAB\xCD\xEF\x02D3\x14\xc9\x04",
+        "Board 2 channel 3 drive command OK";
+    $resp = "\x0F\xAB\xCD\xEF\x02S3\xF0\x53\x04";
     syswrite $client, $resp, length($resp);
 
 }
@@ -58,7 +69,16 @@ elsif ($pid) {
 
     # Connect to controller
     $soleno->connect_target();
-
+	$soleno->enumerate();
+	
+	# Send test command
+	$soleno->set("ABCDEF02", 3);
+	
+	# Wait response
+	my $response = $soleno->_read_packet();
+	is $response, "ABCDEF025333", "Expected response on set command received";
+	
+	
     #is ($soleno->program, 1, 'Programming over TCP done');
     waitpid $pid, 0;
     done_testing();
