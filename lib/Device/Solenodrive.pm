@@ -26,7 +26,7 @@ has verbose => (
 has baudrate => (
     is      => 'ro',
     isa     => 'Int',
-    default => 56700,
+    default => 57600,
     );
 
 # Ensure we read the hexfile after constructing the Bootloader object
@@ -44,6 +44,15 @@ sub connect_target {
     # Open the port
     $self->_device_open();
 
+}
+
+sub disconnect_target {
+	my $self = shift;
+	
+	# Close the port
+	close $self->{_fh};
+	
+	$self->_debug(1, "Connection closed");
 }
 
 sub enumerate {
@@ -75,6 +84,11 @@ sub enumerate {
 				
 	};
 	
+}
+
+sub list_devices {
+	my $self = shift;
+	
 	foreach (keys(%{$self->{_nodes}})) {
 		say;
 	
@@ -97,6 +111,7 @@ sub _device_open {
     my $dev = $self->device();
     my $fh;
     my $baud = $self->{baudrate};
+    my $report_baudrate = 0;
 
     if ( $dev =~ /\// || $dev =~ /^COM./ ) {
         if ( -S $dev ) {
@@ -124,6 +139,9 @@ sub _device_open {
                 or croak("open of '$dev' failed: $!\n");
             $fh->autoflush(1);
         }
+
+        $report_baudrate = 1;
+
     }
     else {
         $dev .= ':' . ('10001') unless ( $dev =~ /:/ );
@@ -131,6 +149,9 @@ sub _device_open {
             or croak("TCP connect to '$dev' failed: $!\n");
     }
 
+	my $message = "Port opened";
+	$message .= "@ $baud bps" if ($report_baudrate);
+	
     $self->_debug( 1, "Port opened" );
 
 	$self->{_connected} = 1;
@@ -455,6 +476,9 @@ Open the connection to the target device, should be called before trying to send
 Enumerate the devices on the bus, reports the addresses of the devices together with their firmware version.
 The returned object is a hash containing the address/firmware version pairs.
 
+=head2 C<list_devices()>
+
+List the devices that were discovered after enumeration
 
 =head2 C<BUILD>
 

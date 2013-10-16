@@ -75,7 +75,7 @@ elsif ($pid) {
 	$soleno->set("ABCDEF02", 3);
 	
 	# Wait response
-	my $response = $soleno->_read_packet();
+	my $response = $soleno->_read_packet(5);
 	is $response, "ABCDEF025333", "Expected response on set command received";
 	
 	
