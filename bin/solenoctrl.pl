@@ -12,9 +12,9 @@ use Data::Dumper;
 my %opts;
 
 # Extract the power and area file options if they are passed.
-getopt( 'dvbc', \%opts );
+getopt( 'dvbci', \%opts );
 
-Pod::Help->help() if ( !defined $opts{d} && !defined $opts{h} && !defined $opts{c});
+Pod::Help->help() if ( !defined $opts{d} || !defined $opts{c} || !defined $opts{i});
 
 # Create the object
 my $soleno = Device::Solenodrive->new(
@@ -26,9 +26,10 @@ my $soleno = Device::Solenodrive->new(
 # Connect to the target device over the specified connection
 $soleno->connect_target();
 
-$soleno->set("05051A2C", $opts{c});
+$soleno->set($opts{i}, $opts{c});
 
-sleep(1);
+select(undef,undef,undef,.4);
+
 
 $soleno->disconnect_target();
 
