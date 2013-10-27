@@ -14,7 +14,8 @@ my %opts;
 # Extract the power and area file options if they are passed.
 getopt( 'dvbci', \%opts );
 
-Pod::Help->help() if ( !defined $opts{d} || !defined $opts{c} || !defined $opts{i});
+Pod::Help->help()
+    if ( !defined $opts{d} || !defined $opts{c} || !defined $opts{i} );
 
 # Create the object
 my $soleno = Device::Solenodrive->new(
@@ -26,30 +27,30 @@ my $soleno = Device::Solenodrive->new(
 # Connect to the target device over the specified connection
 $soleno->connect_target();
 
-$soleno->set($opts{i}, $opts{c});
+$soleno->set( $opts{i}, $opts{c} );
 
-select(undef,undef,undef,.4);
-
+sleep(1);
 
 $soleno->disconnect_target();
-
 
 # ABSTRACT: Control software for Solenodrive devices over RS485
 # PODNAME: solenoctrl.pl
 
 =head1 DESCRIPTION
 
-This scripts implements the control protocol to Solenodrive hardware. Solenodrive is an 8 channel solenoid controller with RS485 interface
+This scripts implements the control protocol to Solenodrive hardware. Solenodrive is an 8 channel solenoid controller with RS485 interface, 8 digital inputs and 8 user buttons.
 
 =head1 SYNOPSYS
 
 Usage:
-solenoctrl.pl -d <device> -c <channel>
+solenoctrl.pl -d <device> -i <ID> -c <channel>
 
-Where C<device> is either a serial port or a TCP socket (format host:portnumber).
+Where C<device> is either a serial port or a TCP socket (format host:portnumber) that provides the interface to the RS485 bus.
 
 When using a serial port, the default baudrate used is 57600 bps. To override, pass
 the parameter 'b' with the required baudrate when invoking the script.
+
+C<ID> is the ID of the Solenodrive you target on the RS485 bus.
 
 C<channel> is the channel to set.
 

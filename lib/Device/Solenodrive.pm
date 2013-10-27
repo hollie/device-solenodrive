@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+
 package Device::Solenodrive;
 
 use Moose;
@@ -15,19 +16,19 @@ has device => (
     is       => 'ro',
     isa      => 'Str',
     required => 1,
-    );
+);
 
 has verbose => (
     is      => 'ro',
     isa     => 'Int',
     default => '0',
-    );
+);
 
 has baudrate => (
     is      => 'ro',
     isa     => 'Int',
     default => 57600,
-    );
+);
 
 # Ensure we read the hexfile after constructing the Bootloader object
 sub BUILD {
@@ -47,61 +48,65 @@ sub connect_target {
 }
 
 sub disconnect_target {
-	my $self = shift;
-	
-	# Close the port
-	close $self->{_fh};
-	
-	$self->_debug(1, "Connection closed");
+    my $self = shift;
+
+    # Close the port
+    close $self->{_fh};
+
+    $self->_debug( 1, "Connection closed" );
 }
 
 sub enumerate {
 
-	my $self = shift;
-	
+    my $self = shift;
+
     my ($response);
 
-	# Ensure we only try to write when we're connected
-	if (! $self->{_connected}) {
-		$self->_debug(3, "Not actually enumerating cause we're not connected yet");
-		return;
-	}
+    # Ensure we only try to write when we're connected
+    if ( !$self->{_connected} ) {
+        $self->_debug( 3,
+            "Not actually enumerating cause we're not connected yet" );
+        return;
+    }
 
     # Enumerate
-    $self->_write_packet("FEFEFEFE", "E0");
+    $self->_write_packet( "FEFEFEFE", "E0" );
 
     # Loop until we get a timeout of more than 10 seconds
     # Nodes on the bus will respond to this command with their address
-	say "Enumerating the devices on the bus, this operation can take up to 10 seconds...";
-	
-	while ($response = $self->_read_packet(5)) {
-		next if ($response eq "invalid_crc"); # Conflict on bus, will be resolved by auto-backoff
-		last if ($response eq "timeout");
-		
-		if ($response =~ /(\w{8})45(\w{2})/) {
-			$self->{_nodes}->{$1}->{firmware} = $2;
-		}
-				
-	};
-	
+    say
+        "Enumerating the devices on the bus, this operation can take up to 10 seconds...";
+
+    while ( $response = $self->_read_packet(5) ) {
+        next
+            if ( $response eq "invalid_crc" )
+            ;    # Conflict on bus, will be resolved by auto-backoff
+        last if ( $response eq "timeout" );
+
+        if ( $response =~ /(\w{8})45(\w{2})/ ) {
+            $self->{_nodes}->{$1}->{firmware} = $2;
+        }
+
+    }
+
 }
 
 sub list_devices {
-	my $self = shift;
-	
-	foreach (keys(%{$self->{_nodes}})) {
-		say;
-	
-	}
+    my $self = shift;
+
+    foreach ( keys( %{ $self->{_nodes} } ) ) {
+        say;
+
+    }
 }
 
 sub set {
-	my ( $self, $address, $channel ) = @_;
-	
-	say "Setting channel $channel on $address";
-	
-	$self->_write_packet($address, "D$channel");
-	
+    my ( $self, $address, $channel ) = @_;
+
+    say "Setting channel $channel on $address";
+
+    $self->_write_packet( $address, "D$channel" );
+
 }
 
 # open the port to a device, be it a serial port or a socket
@@ -110,7 +115,7 @@ sub _device_open {
 
     my $dev = $self->device();
     my $fh;
-    my $baud = $self->{baudrate};
+    my $baud            = $self->{baudrate};
     my $report_baudrate = 0;
 
     if ( $dev =~ /\// || $dev =~ /^COM./ ) {
@@ -149,12 +154,12 @@ sub _device_open {
             or croak("TCP connect to '$dev' failed: $!\n");
     }
 
-	my $message = "Port opened";
-	$message .= "@ $baud bps" if ($report_baudrate);
-	
+    my $message = "Port opened";
+    $message .= "@ $baud bps" if ($report_baudrate);
+
     $self->_debug( 1, "Port opened" );
 
-	$self->{_connected} = 1;
+    $self->{_connected} = 1;
 
     $self->{_fh} = $fh;
     return;
@@ -168,19 +173,20 @@ sub _write_packet {
 
     my ( $self, $address, $data ) = @_;
 
-	croak "Address should be 8 characters long" if (length($address) != 8);
-	croak "Command should be 2 characters long" if (length($data) != 2);
-	
-	# Ensure we only try to write when we're connected
-	if (! $self->{_connected}) {
-		$self->_debug(3, "Not actually writing cause we're not connected yet");
-		return;
-	}
-	
+    croak "Address should be 8 characters long" if ( length($address) != 8 );
+    croak "Command should be 2 characters long" if ( length($data) != 2 );
+
+    # Ensure we only try to write when we're connected
+    if ( !$self->{_connected} ) {
+        $self->_debug( 3,
+            "Not actually writing cause we're not connected yet" );
+        return;
+    }
+
     # Create packet for transmission
-    my $addr_string = pack ("H*", $address);
+    my $addr_string = pack( "H*", $address );
     my $cmnd_string = pack( "A*", $data );
-    my $string = $addr_string . $cmnd_string;
+    my $string      = $addr_string . $cmnd_string;
 
     my $crc = $self->_crc16($string);
     my $packet = $string . pack( "C", $crc % 256 ) . pack( "C", $crc / 256 );
@@ -213,8 +219,8 @@ sub _read_packet {
     my $result;
 
     eval {
-        local $SIG{ALRM} = sub { die "timeout\n" }; # NB: \n required
-        # Set alarm
+        local $SIG{ALRM} = sub { die "timeout\n" };    # NB: \n required
+                                                       # Set alarm
         alarm($timeout);
 
         # Execute receive code
@@ -325,8 +331,8 @@ sub _parse_response {
                     . $self->_dec2hex($rx_crc)
                     . " -- calc: "
                     . $self->_dec2hex($crc_check)
-		      . "\n" );
-		      return "invalid_crc";
+                    . "\n" );
+            return "invalid_crc";
         }
     }
 
@@ -355,7 +361,7 @@ sub _crc16 {
         poly   => 0x1021,
         refin  => 0,
         cont   => 1
-	);
+    );
     $crx->add($input);
     my $crc_check = $crx->digest;
 
@@ -469,16 +475,24 @@ Controls the verbosity of the module. Defaults to 0. Increasing numbers make the
 
 =head2 C<connect_target()>
 
-Open the connection to the target device, should be called before trying to send commands
+Opens the connection to the device that provides the RS485 interface, should be called before trying to send commands
 
-=head2 C<enumerate_bus()>
+=head2 C<set(ID, channel)>
+
+Sets the channel C<channel> of the Solenodrive with ID C<ID> active.
+
+=head2 C<enumerate()>
 
 Enumerate the devices on the bus, reports the addresses of the devices together with their firmware version.
-The returned object is a hash containing the address/firmware version pairs.
+The returned object is a hash containing the address/firmware version pairs. Only supported from Solenodrive firmware v1.1 and upwards.
+
+=head2 C<disconnect_target()>
+
+Closes the connection to the RS485 bus.
 
 =head2 C<list_devices()>
 
-List the devices that were discovered after enumeration
+List the devices that were discovered after enumeration.
 
 =head2 C<BUILD>
 

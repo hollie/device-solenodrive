@@ -12,12 +12,10 @@ BEGIN { use_ok 'Device::Solenodrive'; }
 BEGIN { use_ok 'Test::Exception'; }
 require Test::Exception;
 
-my $soleno = Device::Solenodrive->new(
-    device   => '/dev/ttyUSB0'
-);
+my $soleno = Device::Solenodrive->new( device => '/dev/ttyUSB0' );
 ok $soleno, 'object created';
 
-# Verify the escaping/unescaping of communication 
+# Verify the escaping/unescaping of communication
 my $data = "\x00\x0F\x00\x05\x01\xFF\x84\x01\x02\x03\x05\x04\x05\x05\x04";
 
 my $escaped = $soleno->_escape($data);
@@ -37,9 +35,11 @@ my $crc   = $soleno->_crc16($input);
 is $crc, 0xCBC1, "CRC calculates according to the expected implementation";
 
 # Verify invalid write_parameters cause the expected fails
-throws_ok { $soleno->_write_packet("BABE", "BE") } qr/Address should be 8/, "Check address length";
-throws_ok { $soleno->_write_packet("BABEFACE", "B")} qr/Command should be 2 /, "Check command length";
-lives_ok  { $soleno->_write_packet("BABEFACE", "FF")} "No Mr. Powers, I expect you to die!";
-
+throws_ok { $soleno->_write_packet( "BABE", "BE" ) } qr/Address should be 8/,
+    "Check address length";
+throws_ok { $soleno->_write_packet( "BABEFACE", "B" ) }
+qr/Command should be 2 /, "Check command length";
+lives_ok { $soleno->_write_packet( "BABEFACE", "FF" ) }
+"No Mr. Powers, I expect you to die!";
 
 done_testing();

@@ -14,11 +14,12 @@ require Test::Exception;
 # Check we get an error message on missing input parameters
 my $soleno;
 
-can_ok ('Device::Solenodrive', qw(device));
+can_ok( 'Device::Solenodrive', qw(device) );
 
-throws_ok { $soleno = Device::Solenodrive->new() } qr/Attribute .+ is required at constructor/, "Checking missing parameters";
+throws_ok { $soleno = Device::Solenodrive->new() }
+qr/Attribute .+ is required at constructor/, "Checking missing parameters";
 
-$soleno = Device::Solenodrive->new(device => '/dev/ttyUSB0');
+$soleno = Device::Solenodrive->new( device => '/dev/ttyUSB0' );
 ok $soleno, 'object created';
 ok $soleno->isa('Device::Solenodrive'), 'and it is the right class';
 
